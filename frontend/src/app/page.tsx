@@ -1,21 +1,34 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { API_BASE_URL } from "@/config/api";
 
 export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    // Check for success message from registration query parameter
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("registered") === "true") {
+        setSuccessMessage("Account created successfully! Please sign in.");
+      }
+    }
+  }, []);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setLoading(true);
     setMessage("");
+    setSuccessMessage("");
 
     try {
       const response = await fetch(
@@ -40,8 +53,9 @@ export default function Home() {
       const data = await response.json();
 
       localStorage.setItem("token", data.token);
+      localStorage.setItem("userEmail", email);
 
-router.push("/dashboard");
+      router.push("/dashboard");
     } catch (error) {
       console.error(error);
       setMessage("Unable to connect to the backend.");
@@ -63,6 +77,12 @@ router.push("/dashboard");
             Sign in to manage your leads
           </p>
         </div>
+
+        {successMessage && (
+          <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800 font-medium">
+            {successMessage}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-5">
 
@@ -115,10 +135,17 @@ router.push("/dashboard");
         </form>
 
         {message && (
-          <p className="mt-5 text-center text-sm text-zinc-600">
+          <p className="mt-5 text-center text-sm text-rose-600 font-medium">
             {message}
           </p>
         )}
+
+        <div className="mt-6 text-center text-sm text-zinc-600 pt-4 border-t border-zinc-100">
+          Don't have an account?{" "}
+          <Link href="/register" className="font-semibold text-black hover:underline">
+            Create account
+          </Link>
+        </div>
 
       </div>
     </main>
