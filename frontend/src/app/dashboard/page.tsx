@@ -414,7 +414,7 @@ export default function DashboardPage() {
   const handleSaveToList = async (listId: string) => {
     if (selectedLeadIds.length === 0) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/lists/${listId}/leads`, {
+      const res = await fetch(`${API_BASE_URL}/api/lists/${listId}/leads/batch`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ leadIds: selectedLeadIds }),
@@ -422,10 +422,24 @@ export default function DashboardPage() {
       if (handleAuthError(res)) return;
 
       if (res.ok) {
-        showNotification('success', `Added ${selectedLeadIds.length} lead${selectedLeadIds.length > 1 ? 's' : ''} to outreach list!`);
+        const data = await res.json().catch(() => ({}));
+        const addedCount = typeof data.addedCount === 'number' ? data.addedCount : selectedLeadIds.length;
+        const alreadyPresent = typeof data.alreadyPresentCount === 'number' ? data.alreadyPresentCount : 0;
+
+        let msg = `Added ${addedCount} lead${addedCount !== 1 ? 's' : ''} to outreach list!`;
+        if (alreadyPresent > 0 && addedCount > 0) {
+          msg = `Added ${addedCount} lead${addedCount !== 1 ? 's' : ''} (${alreadyPresent} already in list)`;
+        } else if (alreadyPresent > 0 && addedCount === 0) {
+          msg = `Selected lead${alreadyPresent !== 1 ? 's are' : ' is'} already in this list`;
+        }
+
+        showNotification('success', msg);
         setIsListModalOpen(false);
         setSelectedLeadIds([]);
         fetchSavedLists();
+      } else {
+        const err = await res.json().catch(() => null);
+        showNotification('error', err?.message || 'Failed to add leads to list.');
       }
     } catch (e) {
       showNotification('error', 'Failed to add leads to list.');
@@ -1105,13 +1119,29 @@ export default function DashboardPage() {
                     Centralized repository of all prospect records identified across your campaigns
                   </p>
                 </div>
-                <button
-                  onClick={() => handleExportCsv(peopleLeads)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-xl text-xs font-semibold transition-colors"
-                >
-                  <ExportIcon className="w-4 h-4" />
-                  <span>Export All Saved Leads</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {selectedLeadIds.length > 0 && (
+                    <div className="flex items-center space-x-2 animate-fade-in">
+                      <span className="text-xs text-indigo-300 font-semibold bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-1 rounded-lg">
+                        {selectedLeadIds.length} selected
+                      </span>
+                      <button
+                        onClick={() => setIsListModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+                      >
+                        <PlusIcon className="w-4 h-4" />
+                        <span>Add to List</span>
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => handleExportCsv(peopleLeads)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    <ExportIcon className="w-4 h-4" />
+                    <span>Export All Saved Leads</span>
+                  </button>
+                </div>
               </div>
 
               <ResultsTable

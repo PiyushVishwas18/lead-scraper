@@ -107,8 +107,8 @@ public class SavedListDeleteTest {
             assertNotNull(leadId);
 
             // 3. Add lead to list
-            int added = savedListService.addLeadsToList(ownerId, listId, List.of(leadId));
-            assertEquals(1, added);
+            var result = savedListService.addLeadsToList(ownerId, listId, List.of(leadId));
+            assertEquals(1, result.addedCount());
 
             // Verify association exists
             SavedListLeadId linkId = new SavedListLeadId(listId, leadId);

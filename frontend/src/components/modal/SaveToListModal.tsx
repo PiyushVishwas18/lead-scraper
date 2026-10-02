@@ -197,7 +197,7 @@ export const SaveToListModal: React.FC<SaveToListModalProps> = ({
               disabled={mode === 'existing' ? !selectedListId : !newListName.trim()}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
             >
-              Save Leads
+              {mode === 'existing' ? 'Add Selected Leads' : 'Save Leads'}
             </button>
           </div>
         </form>

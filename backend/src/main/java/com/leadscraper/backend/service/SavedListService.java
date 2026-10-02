@@ -1,6 +1,7 @@
 package com.leadscraper.backend.service;
 
 import com.leadscraper.backend.dto.employee.EmployeeLeadResponse;
+import com.leadscraper.backend.dto.lead.BatchAddLeadsResult;
 import com.leadscraper.backend.dto.lead.CreateListRequest;
 import com.leadscraper.backend.dto.lead.SavedListResponse;
 import com.leadscraper.backend.entity.EmployeeLead;
@@ -81,25 +82,37 @@ public class SavedListService {
     }
 
     @Transactional
-    public int addLeadsToList(UUID ownerId, UUID listId, List<UUID> leadIds) {
-        SavedList list = savedListRepository.findByIdAndOwnerId(listId, ownerId)
-                .orElseThrow(() -> new IllegalArgumentException("Saved list not found"));
+    public BatchAddLeadsResult addLeadsToList(UUID ownerId, UUID listId, List<UUID> leadIds) {
+        SavedList list = savedListRepository.findById(listId)
+                .orElseThrow(() -> new ResourceNotFoundException("Saved list not found"));
+        if (!list.getOwnerId().equals(ownerId)) {
+            throw new ForbiddenException("You are not allowed to add leads to this list");
+        }
 
         int addedCount = 0;
-        for (UUID leadId : leadIds) {
-            if (leadId == null) continue;
-            EmployeeLead lead = employeeLeadRepository.findById(leadId).orElse(null);
-            if (lead != null && lead.getOwnerId().equals(ownerId)) {
-                SavedListLeadId linkId = new SavedListLeadId(list.getId(), leadId);
-                if (!savedListLeadRepository.existsById(linkId)) {
-                    savedListLeadRepository.save(new SavedListLead(linkId));
-                    addedCount++;
+        int alreadyPresentCount = 0;
+        if (leadIds != null) {
+            for (UUID leadId : leadIds) {
+                if (leadId == null) continue;
+                EmployeeLead lead = employeeLeadRepository.findById(leadId).orElse(null);
+                if (lead != null && lead.getOwnerId().equals(ownerId)) {
+                    SavedListLeadId linkId = new SavedListLeadId(list.getId(), leadId);
+                    if (savedListLeadRepository.existsById(linkId)) {
+                        alreadyPresentCount++;
+                    } else {
+                        savedListLeadRepository.save(new SavedListLead(linkId));
+                        addedCount++;
+                    }
                 }
             }
         }
-        list.setUpdatedAt(Instant.now());
-        savedListRepository.save(list);
-        return addedCount;
+
+        if (addedCount > 0) {
+            list.setUpdatedAt(Instant.now());
+            savedListRepository.save(list);
+        }
+
+        return new BatchAddLeadsResult(addedCount, alreadyPresentCount);
     }
 
     @Transactional

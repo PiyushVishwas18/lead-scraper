@@ -2,6 +2,7 @@ package com.leadscraper.backend.controller;
 
 import com.leadscraper.backend.dto.employee.EmployeeLeadResponse;
 import com.leadscraper.backend.dto.lead.AddLeadsToListRequest;
+import com.leadscraper.backend.dto.lead.BatchAddLeadsResult;
 import com.leadscraper.backend.dto.lead.CreateListRequest;
 import com.leadscraper.backend.dto.lead.SavedListResponse;
 import com.leadscraper.backend.entity.User;
@@ -71,14 +72,18 @@ public class SavedListController {
         return ResponseEntity.ok(Map.of("message", "List deleted successfully"));
     }
 
-    @PostMapping("/{id}/leads")
+    @PostMapping({ "/{id}/leads", "/{id}/leads/batch" })
     public ResponseEntity<Map<String, Object>> addLeadsToList(
             Authentication authentication,
             @PathVariable UUID id,
             @Valid @RequestBody AddLeadsToListRequest request) {
         UUID userId = getUserId(authentication);
-        int added = savedListService.addLeadsToList(userId, id, request.leadIds());
-        return ResponseEntity.ok(Map.of("addedCount", added, "message", "Leads added to list successfully"));
+        BatchAddLeadsResult result = savedListService.addLeadsToList(userId, id, request.leadIds());
+        return ResponseEntity.ok(Map.of(
+                "addedCount", result.addedCount(),
+                "alreadyPresentCount", result.alreadyPresentCount(),
+                "message", "Leads processed successfully"
+        ));
     }
 
     @DeleteMapping("/{id}/leads/{leadId}")
