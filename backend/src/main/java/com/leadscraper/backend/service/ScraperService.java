@@ -15,7 +15,7 @@ import java.util.Map;
 @Service
 public class ScraperService {
 
-    private static final String OVERTURE_PATH = "s3://overturemaps-us-west-2/release/2026-07-22.0/theme=places/type=place/*";
+    private static final String OVERTURE_PATH = "s3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/*";
 
     private final LocationResolverService locationResolverService;
 
@@ -64,7 +64,7 @@ public class ScraperService {
                     AND bbox.ymax >= ?
                     AND (
                         lower(names.primary) LIKE ?
-                        OR lower(categories.primary) LIKE ?
+                        OR lower(taxonomy.primary) LIKE ?
                     )
                 ORDER BY confidence DESC
                 LIMIT ?
