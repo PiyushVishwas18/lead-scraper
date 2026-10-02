@@ -2,12 +2,29 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
+import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { AiSearchBar } from '@/components/search/AiSearchBar';
 import { FilterSidebar } from '@/components/search/FilterSidebar';
 import { ResultsTable } from '@/components/table/ResultsTable';
 import { ProfileDrawer } from '@/components/drawer/ProfileDrawer';
 import { SaveToListModal } from '@/components/modal/SaveToListModal';
+import { Toast } from '@/components/ui/Toast';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Badge } from '@/components/ui/Badge';
+import {
+  CompaniesIcon,
+  DiscoveryIcon,
+  DecisionMakersIcon,
+  ExportIcon,
+  PlusIcon,
+  SearchIcon,
+  ExternalLinkIcon,
+  SpinnerIcon,
+  CheckIcon,
+} from '@/components/ui/Icons';
 import { API_BASE_URL } from '@/config/api';
 import {
   EmployeeLead,
@@ -22,7 +39,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<string>('search');
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [isOpenMobile, setIsOpenMobile] = useState<boolean>(false);
 
   // Usage & Credit Stats
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
@@ -83,7 +101,7 @@ export default function DashboardPage() {
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
-    setTimeout(() => setNotification(null), 4000);
+    setTimeout(() => setNotification(null), 4500);
   };
 
   const getHeaders = useCallback(() => {
@@ -217,7 +235,7 @@ export default function DashboardPage() {
         setFilters(parsedFilter);
         fetchPeopleSearch(parsedFilter);
         fetchLiveCount(parsedFilter);
-        showNotification('success', 'AI parsed search request into structured filters!');
+        showNotification('success', 'AI converted natural language query into filters!');
       } else {
         showNotification('error', 'AI search parsing is temporarily unavailable.');
       }
@@ -244,7 +262,7 @@ export default function DashboardPage() {
         const data = await res.json();
         setCompanyResults(data || []);
         fetchUsageStats();
-        showNotification('success', `Found ${data.length} companies matching search.`);
+        showNotification('success', `Found ${data.length} companies matching criteria.`);
       }
     } catch (e) {
       showNotification('error', 'Failed to execute company search.');
@@ -264,9 +282,9 @@ export default function DashboardPage() {
     setDiscoveredEmployees([]);
     setSelectedDiscoveredIndexes([]);
     setDiscoverySteps([
-      { label: 'Analyzing website URL & domain', done: true },
-      { label: 'Discovering employee & team pages', done: false },
-      { label: 'Parsing employees & classifying decision makers', done: false },
+      { label: 'Analyzing target domain URL & security headers', done: true },
+      { label: 'Discovering corporate team and staff directories', done: false },
+      { label: 'Extracting verified employees and detecting leadership', done: false },
     ]);
 
     try {
@@ -291,15 +309,15 @@ export default function DashboardPage() {
         setDiscoveredEmployees(data || []);
         fetchUsageStats();
         if (data.length > 0) {
-          showNotification('success', `Discovered ${data.length} employees from ${site}!`);
+          showNotification('success', `Discovered ${data.length} team members from ${site}!`);
         } else {
-          showNotification('error', 'No public employees found on company website pages.');
+          showNotification('error', 'No publicly indexed employees discovered on this domain.');
         }
       } else {
         showNotification('error', 'Failed to discover employees for this domain.');
       }
     } catch (e) {
-      showNotification('error', 'Error occurred during employee discovery.');
+      showNotification('error', 'Error occurred during employee discovery crawl.');
     } finally {
       setDiscovering(false);
     }
@@ -324,7 +342,7 @@ export default function DashboardPage() {
       if (handleAuthError(res)) return;
 
       if (res.ok) {
-        showNotification('success', `Saved ${selected.length} employees to leads!`);
+        showNotification('success', `Successfully saved ${selected.length} employees to your database!`);
         setSelectedDiscoveredIndexes([]);
         fetchPeopleSearch(filters);
         fetchUsageStats();
@@ -357,7 +375,7 @@ export default function DashboardPage() {
         setPeopleLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
         if (drawerLead && drawerLead.id === updated.id) setDrawerLead(updated);
         fetchUsageStats();
-        showNotification('success', `Email verification completed: ${updated.emailStatus}`);
+        showNotification('success', `Email deliverability verification: ${updated.emailStatus}`);
       } else {
         showNotification('error', 'Failed to verify email address.');
       }
@@ -400,7 +418,7 @@ export default function DashboardPage() {
       if (handleAuthError(res)) return;
 
       if (res.ok) {
-        showNotification('success', `Added ${selectedLeadIds.length} leads to saved list!`);
+        showNotification('success', `Added ${selectedLeadIds.length} lead${selectedLeadIds.length > 1 ? 's' : ''} to outreach list!`);
         setIsListModalOpen(false);
         setSelectedLeadIds([]);
         fetchSavedLists();
@@ -446,7 +464,7 @@ export default function DashboardPage() {
         a.href = url;
         a.download = `lead_export_${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
-        showNotification('success', 'CSV export downloaded successfully!');
+        showNotification('success', 'CSV export file downloaded successfully!');
       }
     } catch (e) {
       showNotification('error', 'Failed to generate CSV export.');
@@ -460,567 +478,879 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Platform Navigation Header */}
-      <Header
+    <div className="min-h-screen bg-[#090d16] text-slate-100 flex font-sans">
+      {/* Persistent Left Sidebar */}
+      <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        credits={usageStats ? { remainingCredits: usageStats.remainingCredits, totalCredits: usageStats.totalCredits } : undefined}
+        credits={
+          usageStats
+            ? { remainingCredits: usageStats.remainingCredits, totalCredits: usageStats.totalCredits }
+            : undefined
+        }
         userEmail={userEmail}
         onLogout={handleLogout}
+        isOpenMobile={isOpenMobile}
+        setIsOpenMobile={setIsOpenMobile}
+        savedLeadsCount={peopleLeads.length}
+        savedListsCount={savedLists.length}
       />
 
-      {/* Notification Banner */}
-      {notification && (
-        <div
-          className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-lg shadow-xl text-xs font-semibold flex items-center space-x-2 border animate-bounce ${
-            notification.type === 'success'
-              ? 'bg-emerald-950 border-emerald-500/50 text-emerald-300'
-              : 'bg-rose-950 border-rose-500/50 text-rose-300'
-          }`}
-        >
-          <span>{notification.message}</span>
-        </div>
-      )}
+      {/* Main Content Area */}
+      <div className="flex-1 lg:pl-64 flex flex-col min-w-0 min-h-screen">
+        {/* Top Header Navigation */}
+        <Header
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          credits={
+            usageStats
+              ? { remainingCredits: usageStats.remainingCredits, totalCredits: usageStats.totalCredits }
+              : undefined
+          }
+          userEmail={userEmail}
+          onLogout={handleLogout}
+          onOpenMobileMenu={() => setIsOpenMobile(true)}
+          onQuickAiSearchClick={() => setActiveTab('search')}
+        />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* ============================================================ */}
-        {/* TAB 1: SEARCH / PEOPLE SEARCH & DASHBOARD */}
-        {/* ============================================================ */}
-        {(activeTab === 'search' || activeTab === 'people' || activeTab === 'decision-makers') && (
-          <div className="space-y-6">
-            {/* AI Natural Language Search Header */}
-            <AiSearchBar onSearch={handleAiSearch} isLoading={isAiParsing} />
+        {/* Floating Notification Toast */}
+        <Toast notification={notification} onClose={() => setNotification(null)} />
 
-            {/* Live People Count Indicator */}
-            <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl px-5 py-3 shadow">
-              <div className="flex items-center space-x-3">
-                <span className="w-3 h-3 rounded-full bg-indigo-500 animate-ping"></span>
-                <span className="text-sm font-bold text-white">
-                  {livePeopleCount.toLocaleString()} people match your search criteria
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
-                {selectedLeadIds.length > 0 && (
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-indigo-300 font-semibold bg-indigo-500/20 border border-indigo-500/30 px-2.5 py-1 rounded-md">
-                      {selectedLeadIds.length} selected
-                    </span>
-                    <button
-                      onClick={() => setIsListModalOpen(true)}
-                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium transition-colors"
-                    >
-                      + Save to List
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleExportCsv(peopleLeads.filter((l) => selectedLeadIds.includes(l.id)))
-                      }
-                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-xs font-medium transition-colors"
-                    >
-                      Export CSV
-                    </button>
+        {/* Dynamic Section Content */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+          {/* ============================================================ */}
+          {/* TAB 0: DASHBOARD OVERVIEW */}
+          {/* ============================================================ */}
+          {activeTab === 'dashboard' && (
+            <DashboardOverview
+              usageStats={usageStats}
+              recentLeads={peopleLeads}
+              savedLists={savedLists}
+              onNavigateTab={setActiveTab}
+              onSelectLead={(lead) => setDrawerLead(lead)}
+              onExportCsv={handleExportCsv}
+              userEmail={userEmail}
+              loadingLeads={loadingPeople}
+            />
+          )}
+
+          {/* ============================================================ */}
+          {/* TAB 1: AI SEARCH & PEOPLE SEARCH */}
+          {/* ============================================================ */}
+          {(activeTab === 'search' || activeTab === 'people' || activeTab === 'decision-makers') && (
+            <div className="space-y-6 animate-fade-in">
+              {/* Natural Language AI Search Bar */}
+              {activeTab === 'search' && (
+                <AiSearchBar onSearch={handleAiSearch} isLoading={isAiParsing} />
+              )}
+
+              {/* Decision Makers Info Banner */}
+              {activeTab === 'decision-makers' && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold shrink-0">
+                      DM
+                    </div>
+                    <div>
+                      <div className="font-semibold text-white">Decision Maker Intelligence Filter</div>
+                      <p className="text-slate-400 mt-0.5">
+                        Isolating executive and leadership tier contacts (CXO, VP, Founders, Heads)
+                      </p>
+                    </div>
                   </div>
-                )}
+                  <Badge variant="decisionMaker">High-Value Target</Badge>
+                </div>
+              )}
+
+              {/* Action & Live Count Indicator Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0f172a]/70 border border-slate-800/80 rounded-xl px-4 sm:px-5 py-3 shadow-sm backdrop-blur-sm">
+                <div className="flex items-center space-x-3">
+                  <span className="flex h-2.5 w-2.5 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <div className="text-xs sm:text-sm font-semibold text-white">
+                    <span className="text-indigo-400 font-bold">{livePeopleCount.toLocaleString()}</span>{' '}
+                    matches in global directory
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {selectedLeadIds.length > 0 && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-indigo-300 font-semibold bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-1 rounded-lg">
+                        {selectedLeadIds.length} selected
+                      </span>
+                      <button
+                        onClick={() => setIsListModalOpen(true)}
+                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1"
+                      >
+                        <PlusIcon className="w-3.5 h-3.5" />
+                        <span>Save to List</span>
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleExportCsv(peopleLeads.filter((l) => selectedLeadIds.includes(l.id)))
+                        }
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                      >
+                        <ExportIcon className="w-3.5 h-3.5" />
+                        <span>Export CSV</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Main Search Content Layout (FilterSidebar + ResultsTable) */}
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* Reusable Filter Sidebar */}
-              <FilterSidebar
-                filters={filters}
-                setFilters={setFilters}
-                onApply={() => {
-                  fetchPeopleSearch(filters);
-                  fetchLiveCount(filters);
-                }}
-                onClear={() => {
-                  const defaultF: SearchFilterRequest = { page: 0, size: 20, sort: 'newest' };
-                  setFilters(defaultF);
-                  fetchPeopleSearch(defaultF);
-                  fetchLiveCount(defaultF);
-                }}
-              />
-
-              {/* Main Results Table */}
-              <div className="flex-1 space-y-4">
-                <ResultsTable
-                  leads={
-                    activeTab === 'decision-makers'
-                      ? peopleLeads.filter((l) => l.isDecisionMaker)
-                      : peopleLeads
-                  }
-                  selectedLeadIds={selectedLeadIds}
-                  setSelectedLeadIds={setSelectedLeadIds}
-                  onRowClick={(lead) => setDrawerLead(lead)}
-                  onVerifyEmail={handleVerifyEmail}
-                  onRevealContact={handleRevealContact}
-                  onAddToList={(lead) => {
-                    setSelectedLeadIds([lead.id]);
-                    setIsListModalOpen(true);
+              {/* Main Two-Column Search Grid (FilterSidebar + ResultsTable) */}
+              <div className="flex flex-col lg:flex-row gap-6 items-start">
+                <FilterSidebar
+                  filters={filters}
+                  setFilters={setFilters}
+                  onApply={() => {
+                    fetchPeopleSearch(filters);
+                    fetchLiveCount(filters);
                   }}
-                  verifyingKey={verifyingCandidateKey}
-                  loading={loadingPeople}
+                  onClear={() => {
+                    const defaultF: SearchFilterRequest = { page: 0, size: 20, sort: 'newest' };
+                    setFilters(defaultF);
+                    fetchPeopleSearch(defaultF);
+                    fetchLiveCount(defaultF);
+                  }}
                 />
 
-                {/* Server-Side Pagination Controls */}
-                <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-400">
-                  <span>
-                    Page {pageStats.page + 1} of {pageStats.totalPages} ({pageStats.totalElements} total leads)
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      disabled={pageStats.page === 0 || loadingPeople}
-                      onClick={() => {
-                        const newF = { ...filters, page: pageStats.page - 1 };
-                        setFilters(newF);
-                        fetchPeopleSearch(newF);
-                      }}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded font-medium transition-colors"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      disabled={pageStats.page >= pageStats.totalPages - 1 || loadingPeople}
-                      onClick={() => {
-                        const newF = { ...filters, page: pageStats.page + 1 };
-                        setFilters(newF);
-                        fetchPeopleSearch(newF);
-                      }}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded font-medium transition-colors"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* TAB 2: COMPANY SEARCH */}
-        {/* ============================================================ */}
-        {activeTab === 'companies' && (
-          <div className="space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-4">
-              <h2 className="text-lg font-bold text-white">Company Search & Discovery</h2>
-              <form onSubmit={handleSearchCompanies} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Keyword / Industry</label>
-                  <input
-                    type="text"
-                    value={companyKeyword}
-                    onChange={(e) => setCompanyKeyword(e.target.value)}
-                    placeholder="e.g. software, fintech"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                <div className="flex-1 w-full space-y-4">
+                  <ResultsTable
+                    leads={
+                      activeTab === 'decision-makers'
+                        ? peopleLeads.filter((l) => l.isDecisionMaker)
+                        : peopleLeads
+                    }
+                    selectedLeadIds={selectedLeadIds}
+                    setSelectedLeadIds={setSelectedLeadIds}
+                    onRowClick={(lead) => setDrawerLead(lead)}
+                    onVerifyEmail={handleVerifyEmail}
+                    onRevealContact={handleRevealContact}
+                    onAddToList={(lead) => {
+                      setSelectedLeadIds([lead.id]);
+                      setIsListModalOpen(true);
+                    }}
+                    verifyingKey={verifyingCandidateKey}
+                    loading={loadingPeople}
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Location / City</label>
-                  <input
-                    type="text"
-                    value={companyLocation}
-                    onChange={(e) => setCompanyLocation(e.target.value)}
-                    placeholder="e.g. London, Mumbai"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div className="flex items-end">
-                  <button
-                    type="submit"
-                    disabled={loadingCompanies}
-                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs rounded transition-colors"
-                  >
-                    {loadingCompanies ? 'Searching Companies...' : 'Search Companies'}
-                  </button>
-                </div>
-              </form>
-            </div>
 
-            {/* Companies Results Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {companyResults.map((comp, idx) => (
-                <div key={idx} className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-bold text-white text-base">{comp.name}</h3>
-                      <p className="text-xs text-indigo-400 mt-0.5">{comp.category || 'Technology'}</p>
-                    </div>
-                    <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-medium">
-                      {comp.companySize || '50-200'}
+                  {/* Server Pagination Bar */}
+                  <div className="flex items-center justify-between bg-[#0f172a]/70 border border-slate-800/80 rounded-xl px-4 py-3 text-xs text-slate-400">
+                    <span>
+                      Page <span className="font-semibold text-white">{pageStats.page + 1}</span> of{' '}
+                      <span className="font-semibold text-white">{pageStats.totalPages}</span>{' '}
+                      ({pageStats.totalElements.toLocaleString()} total entries)
                     </span>
-                  </div>
-
-                  <p className="text-xs text-slate-400 line-clamp-2">{comp.description}</p>
-
-                  <div className="text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-                    <span>📍 {[comp.city, comp.country].filter(Boolean).join(', ')}</span>
-                    {comp.revenue && <span>💰 {comp.revenue}</span>}
-                    {comp.funding && <span>🚀 {comp.funding}</span>}
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                    {comp.website ? (
-                      <a
-                        href={comp.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-indigo-400 hover:underline truncate max-w-[200px]"
+                    <div className="flex items-center space-x-2">
+                      <button
+                        disabled={pageStats.page === 0 || loadingPeople}
+                        onClick={() => {
+                          const newF = { ...filters, page: pageStats.page - 1 };
+                          setFilters(newF);
+                          fetchPeopleSearch(newF);
+                        }}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 border border-slate-700/80 rounded-lg font-medium transition-colors"
                       >
-                        {comp.website}
-                      </a>
-                    ) : (
-                      <span></span>
-                    )}
+                        Previous
+                      </button>
+                      <button
+                        disabled={pageStats.page >= pageStats.totalPages - 1 || loadingPeople}
+                        onClick={() => {
+                          const newF = { ...filters, page: pageStats.page + 1 };
+                          setFilters(newF);
+                          fetchPeopleSearch(newF);
+                        }}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 border border-slate-700/80 rounded-lg font-medium transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================ */}
+          {/* TAB 2: COMPANY SEARCH */}
+          {/* ============================================================ */}
+          {activeTab === 'companies' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="bg-[#0f172a]/70 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <CompaniesIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white tracking-tight">
+                      Target Account Directory
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Query corporate databases by keyword, industry, and geographic location
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSearchCompanies} className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Keyword / Industry
+                    </label>
+                    <input
+                      type="text"
+                      value={companyKeyword}
+                      onChange={(e) => setCompanyKeyword(e.target.value)}
+                      placeholder="e.g. Fintech, SaaS, Healthcare"
+                      className="w-full px-3 py-2 bg-[#0b1120] border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Target City / Hub
+                    </label>
+                    <input
+                      type="text"
+                      value={companyLocation}
+                      onChange={(e) => setCompanyLocation(e.target.value)}
+                      placeholder="e.g. London, San Francisco"
+                      className="w-full px-3 py-2 bg-[#0b1120] border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                  <div className="flex items-end">
                     <button
-                      onClick={() => {
-                        setDiscoveryWebsite(comp.website || comp.name);
-                        setActiveTab('discovery');
-                        handleDiscoverEmployees(comp.website || comp.name);
-                      }}
-                      className="px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded text-xs font-semibold transition-colors"
+                      type="submit"
+                      disabled={loadingCompanies}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-colors flex items-center justify-center gap-1.5"
                     >
-                      Find Employees →
+                      {loadingCompanies ? (
+                        <>
+                          <SpinnerIcon className="w-3.5 h-3.5 text-white" />
+                          <span>Searching Accounts...</span>
+                        </>
+                      ) : (
+                        <>
+                          <SearchIcon className="w-3.5 h-3.5" />
+                          <span>Search Companies</span>
+                        </>
+                      )}
                     </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* TAB 3: EMPLOYEE DISCOVERY */}
-        {/* ============================================================ */}
-        {activeTab === 'discovery' && (
-          <div className="space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-4">
-              <div className="flex items-center space-x-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <h2 className="text-base font-bold text-white">Employee Website Discovery Pipeline</h2>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Company Website URL</label>
-                  <input
-                    type="text"
-                    value={discoveryWebsite}
-                    onChange={(e) => setDiscoveryWebsite(e.target.value)}
-                    placeholder="https://example.com"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Max Employees</label>
-                  <select
-                    value={maxEmployees}
-                    onChange={(e) => setMaxEmployees(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-xs text-white focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value={10}>10 Employees</option>
-                    <option value={20}>20 Employees</option>
-                    <option value={50}>50 Employees</option>
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <button
-                    onClick={() => handleDiscoverEmployees()}
-                    disabled={discovering || !discoveryWebsite.trim()}
-                    className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium text-xs rounded transition-colors disabled:opacity-50"
-                  >
-                    {discovering ? 'Discovering...' : 'Discover Employees'}
-                  </button>
-                </div>
+                </form>
               </div>
 
-              {/* Progress Steps Indicator */}
-              {discoverySteps.length > 0 && (
-                <div className="pt-3 border-t border-slate-800 flex items-center space-x-4 text-xs">
-                  {discoverySteps.map((step, idx) => (
-                    <div key={idx} className="flex items-center space-x-1.5">
-                      <span
-                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                          step.done ? 'bg-emerald-500 text-slate-950' : 'bg-slate-700 text-slate-400 animate-pulse'
-                        }`}
-                      >
-                        {step.done ? '✓' : idx + 1}
-                      </span>
-                      <span className={step.done ? 'text-slate-200' : 'text-slate-400'}>{step.label}</span>
+              {/* Companies Grid */}
+              {loadingCompanies ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Array.from({ length: 4 }).map((_, idx) => (
+                    <div key={idx} className="bg-[#0f172a]/70 border border-slate-800/80 rounded-xl p-5 space-y-3">
+                      <Skeleton className="h-5 w-40" />
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : companyResults.length === 0 ? (
+                <EmptyState
+                  title="No Companies Found"
+                  description="Run a keyword or location search to discover target corporate entities."
+                  actionText="Search Software Accounts"
+                  onAction={() => {
+                    setCompanyKeyword('software');
+                    setCompanyLocation('London');
+                    handleSearchCompanies();
+                  }}
+                  icon={<CompaniesIcon className="w-7 h-7" />}
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {companyResults.map((comp, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-[#0f172a]/70 border border-slate-800/80 rounded-2xl p-5 shadow-sm space-y-3.5 hover:border-slate-700 transition-all flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-indigo-400 shrink-0">
+                              {comp.name.charAt(0)}
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-white text-sm sm:text-base leading-tight">
+                                {comp.name}
+                              </h3>
+                              <p className="text-xs text-indigo-400 mt-0.5 font-medium">
+                                {comp.category || 'Technology & Software'}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="default" size="sm">
+                            {comp.companySize || '50-200 team'}
+                          </Badge>
+                        </div>
+
+                        {comp.description && (
+                          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                            {comp.description}
+                          </p>
+                        )}
+
+                        <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-4 gap-y-1 pt-1">
+                          <span>📍 {[comp.city, comp.country].filter(Boolean).join(', ') || 'Global'}</span>
+                          {comp.revenue && <span>💰 {comp.revenue}</span>}
+                          {comp.funding && <span>🚀 {comp.funding}</span>}
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                        {comp.website ? (
+                          <a
+                            href={comp.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 hover:underline truncate max-w-[200px]"
+                          >
+                            <span className="truncate">{comp.website}</span>
+                            <ExternalLinkIcon className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-slate-500">Domain unlisted</span>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setDiscoveryWebsite(comp.website || comp.name);
+                            setActiveTab('discovery');
+                            handleDiscoverEmployees(comp.website || comp.name);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          <span>Discover Team</span>
+                          <span className="text-indigo-400">→</span>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+          )}
 
-            {/* Discovered Employees Table */}
-            {discoveredEmployees.length > 0 && (
-              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl space-y-3 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white">
-                    Discovered {discoveredEmployees.length} Employees
-                  </h3>
-                  {selectedDiscoveredIndexes.length > 0 && (
-                    <button
-                      onClick={handleSaveDiscoveredBatch}
-                      disabled={savingBatch}
-                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs rounded transition-colors disabled:opacity-50"
+          {/* ============================================================ */}
+          {/* TAB 3: EMPLOYEE DISCOVERY */}
+          {/* ============================================================ */}
+          {activeTab === 'discovery' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="bg-[#0f172a]/70 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-5">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <DiscoveryIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white tracking-tight">
+                      Automated Domain Employee Discovery
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Crawl target company domains to automatically extract team rosters and leadership
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Company Website URL / Domain
+                    </label>
+                    <input
+                      type="text"
+                      value={discoveryWebsite}
+                      onChange={(e) => setDiscoveryWebsite(e.target.value)}
+                      placeholder="e.g. stripe.com or https://company.com"
+                      className="w-full px-3 py-2 bg-[#0b1120] border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Target Volume
+                    </label>
+                    <select
+                      value={maxEmployees}
+                      onChange={(e) => setMaxEmployees(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-[#0b1120] border border-slate-700/80 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
                     >
-                      {savingBatch ? 'Saving...' : `Save Selected (${selectedDiscoveredIndexes.length})`}
+                      <option value={10}>10 Team Members</option>
+                      <option value={20}>20 Team Members</option>
+                      <option value={50}>50 Team Members</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => handleDiscoverEmployees()}
+                      disabled={discovering || !discoveryWebsite.trim()}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5"
+                    >
+                      {discovering ? (
+                        <>
+                          <SpinnerIcon className="w-3.5 h-3.5 text-white" />
+                          <span>Crawling Domain...</span>
+                        </>
+                      ) : (
+                        <>
+                          <DiscoveryIcon className="w-3.5 h-3.5" />
+                          <span>Launch Discovery</span>
+                        </>
+                      )}
                     </button>
+                  </div>
+                </div>
+
+                {/* Progress Steps Timeline */}
+                {discoverySteps.length > 0 && (
+                  <div className="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    {discoverySteps.map((step, idx) => (
+                      <div key={idx} className="flex items-center space-x-2">
+                        <div
+                          className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                            step.done
+                              ? 'bg-emerald-500 text-slate-950'
+                              : 'bg-indigo-600/30 text-indigo-300 animate-pulse'
+                          }`}
+                        >
+                          {step.done ? <CheckIcon className="w-3 h-3 text-slate-950" /> : idx + 1}
+                        </div>
+                        <span className={step.done ? 'text-slate-200 font-medium' : 'text-slate-400'}>
+                          {step.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Discovered Employees Table */}
+              {discoveredEmployees.length > 0 && (
+                <div className="bg-[#0f172a]/70 border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl space-y-3 p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                        Discovered {discoveredEmployees.length} Contacts
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Select team members to permanently add to your lead database
+                      </p>
+                    </div>
+                    {selectedDiscoveredIndexes.length > 0 && (
+                      <button
+                        onClick={handleSaveDiscoveredBatch}
+                        disabled={savingBatch}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {savingBatch ? (
+                          <>
+                            <SpinnerIcon className="w-3.5 h-3.5 text-white" />
+                            <span>Saving Leads...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckIcon className="w-3.5 h-3.5" />
+                            <span>Save Selected ({selectedDiscoveredIndexes.length})</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-[#0b1120]/90 border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                          <th className="py-3 px-3 w-10">
+                            <input
+                              type="checkbox"
+                              checked={
+                                selectedDiscoveredIndexes.length === discoveredEmployees.length &&
+                                discoveredEmployees.length > 0
+                              }
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedDiscoveredIndexes(discoveredEmployees.map((_, i) => i));
+                                } else {
+                                  setSelectedDiscoveredIndexes([]);
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-slate-700 bg-[#090d16] text-indigo-600 cursor-pointer"
+                            />
+                          </th>
+                          <th className="py-3 px-3">Full Name</th>
+                          <th className="py-3 px-3">Title & Department</th>
+                          <th className="py-3 px-3">Discovered Email</th>
+                          <th className="py-3 px-3">Leadership Status</th>
+                          <th className="py-3 px-3">Source URL</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {discoveredEmployees.map((emp, idx) => (
+                          <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="py-3.5 px-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedDiscoveredIndexes.includes(idx)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedDiscoveredIndexes((prev) => [...prev, idx]);
+                                  } else {
+                                    setSelectedDiscoveredIndexes((prev) => prev.filter((i) => i !== idx));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-slate-700 bg-[#090d16] text-indigo-600 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-3.5 px-3 font-semibold text-white">
+                              {emp.fullName}
+                            </td>
+                            <td className="py-3.5 px-3 text-slate-300">
+                              {emp.jobTitle || 'Team Member'}{' '}
+                              {emp.department && <span className="text-slate-500">· {emp.department}</span>}
+                            </td>
+                            <td className="py-3.5 px-3 font-mono text-slate-200">
+                              {emp.email || (
+                                <span className="text-slate-500 font-sans italic text-[11px]">
+                                  No email on public page
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3">
+                              {emp.isDecisionMaker ? (
+                                <Badge variant="decisionMaker" size="sm">
+                                  Decision Maker
+                                </Badge>
+                              ) : (
+                                <span className="text-slate-500 text-[11px]">Individual Contributor</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3">
+                              {emp.sourceUrl ? (
+                                <a
+                                  href={emp.sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-indigo-400 hover:underline truncate max-w-[140px]"
+                                >
+                                  <span>View Page</span>
+                                  <ExternalLinkIcon className="w-3 h-3" />
+                                </a>
+                              ) : (
+                                <span className="text-slate-500">Direct Crawler</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ============================================================ */}
+          {/* TAB 4: SAVED LEADS */}
+          {/* ============================================================ */}
+          {activeTab === 'saved-leads' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0f172a]/70 border border-slate-800/80 rounded-2xl p-5 shadow-sm">
+                <div>
+                  <h2 className="text-base font-bold text-white tracking-tight">
+                    Saved Lead Repository
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Centralized repository of all prospect records identified across your campaigns
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleExportCsv(peopleLeads)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  <ExportIcon className="w-4 h-4" />
+                  <span>Export All Saved Leads</span>
+                </button>
+              </div>
+
+              <ResultsTable
+                leads={peopleLeads}
+                selectedLeadIds={selectedLeadIds}
+                setSelectedLeadIds={setSelectedLeadIds}
+                onRowClick={(lead) => setDrawerLead(lead)}
+                onVerifyEmail={handleVerifyEmail}
+                onRevealContact={handleRevealContact}
+                onAddToList={(lead) => {
+                  setSelectedLeadIds([lead.id]);
+                  setIsListModalOpen(true);
+                }}
+                verifyingKey={verifyingCandidateKey}
+                loading={loadingPeople}
+              />
+            </div>
+          )}
+
+          {/* ============================================================ */}
+          {/* TAB 5: SAVED LISTS */}
+          {/* ============================================================ */}
+          {activeTab === 'saved-lists' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0f172a]/70 border border-slate-800/80 rounded-2xl p-5 shadow-sm">
+                <div>
+                  <h2 className="text-base font-bold text-white tracking-tight">
+                    Target Outreach Lists
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Segmented audience campaigns for cold email sequences and multichannel sales outreach
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsListModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+                >
+                  <PlusIcon className="w-4 h-4" />
+                  <span>Create Outreach List</span>
+                </button>
+              </div>
+
+              {loadingLists ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {Array.from({ length: 3 }).map((_, idx) => (
+                    <div key={idx} className="bg-[#0f172a]/70 border border-slate-800/80 rounded-xl p-5 space-y-3">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-4 w-48" />
+                    </div>
+                  ))}
+                </div>
+              ) : savedLists.length === 0 ? (
+                <EmptyState
+                  title="No Outreach Lists Found"
+                  description="Create target lists to group discovered decision makers and organize sales sequences."
+                  actionText="Create New List"
+                  onAction={() => setIsListModalOpen(true)}
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {savedLists.map((list) => {
+                    const isSelected = selectedList?.id === list.id;
+                    return (
+                      <div
+                        key={list.id}
+                        onClick={async () => {
+                          setSelectedList(list);
+                          try {
+                            const res = await fetch(`${API_BASE_URL}/api/lists/${list.id}/leads`, {
+                              headers: getHeaders(),
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              setListLeads(data || []);
+                            }
+                          } catch (e) {
+                            console.error('Failed to load list leads', e);
+                          }
+                        }}
+                        className={`bg-[#0f172a]/70 border rounded-2xl p-5 cursor-pointer transition-all shadow-sm ${
+                          isSelected
+                            ? 'border-indigo-500 bg-indigo-950/20 shadow-indigo-950/40 ring-1 ring-indigo-500/50'
+                            : 'border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/60'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <h3 className="font-bold text-white text-sm tracking-tight truncate mr-2">
+                            {list.name}
+                          </h3>
+                          <Badge variant="info" size="sm">
+                            {list.leadCount} leads
+                          </Badge>
+                        </div>
+                        {list.description && (
+                          <p className="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">
+                            {list.description}
+                          </p>
+                        )}
+                        <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                          <span>{isSelected ? 'Active Segment' : 'Click to inspect'}</span>
+                          <span className="text-indigo-400 font-medium">View Leads →</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Selected List Lead Details */}
+              {selectedList && (
+                <div className="space-y-4 pt-4 border-t border-slate-800/80 animate-fade-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-white tracking-tight">
+                        Leads in "{selectedList.name}"
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {listLeads.length} leads assigned to this segment
+                      </p>
+                    </div>
+                    {listLeads.length > 0 && (
+                      <button
+                        onClick={() => handleExportCsv(listLeads)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700/80 transition-colors"
+                      >
+                        <ExportIcon className="w-3.5 h-3.5" />
+                        <span>Export List CSV</span>
+                      </button>
+                    )}
+                  </div>
+                  <ResultsTable
+                    leads={listLeads}
+                    selectedLeadIds={[]}
+                    setSelectedLeadIds={() => {}}
+                    onRowClick={(lead) => setDrawerLead(lead)}
+                    onVerifyEmail={handleVerifyEmail}
+                    onRevealContact={handleRevealContact}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ============================================================ */}
+          {/* TAB 6: USAGE & STATISTICS */}
+          {/* ============================================================ */}
+          {activeTab === 'usage' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="bg-[#0f172a]/70 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-800/80">
+                  <div>
+                    <h2 className="text-lg font-bold text-white tracking-tight">
+                      Account Usage & Operational Metrics
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Real-time credit allocation and historical activity records
+                    </p>
+                  </div>
+                  {usageStats && (
+                    <Badge variant="success" size="md">
+                      Active Subscription
+                    </Badge>
                   )}
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-800/80 border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase">
-                        <th className="py-2.5 px-3 w-10">
-                          <input
-                            type="checkbox"
-                            checked={
-                              selectedDiscoveredIndexes.length === discoveredEmployees.length &&
-                              discoveredEmployees.length > 0
-                            }
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedDiscoveredIndexes(discoveredEmployees.map((_, i) => i));
-                              } else {
-                                setSelectedDiscoveredIndexes([]);
-                              }
-                            }}
-                            className="rounded border-slate-700 bg-slate-800 text-indigo-600"
-                          />
-                        </th>
-                        <th className="py-2.5 px-3">Name</th>
-                        <th className="py-2.5 px-3">Title & Dept</th>
-                        <th className="py-2.5 px-3">Published Email</th>
-                        <th className="py-2.5 px-3">Decision Maker</th>
-                        <th className="py-2.5 px-3">Source URL</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800 text-xs">
-                      {discoveredEmployees.map((emp, idx) => (
-                        <tr key={idx} className="hover:bg-slate-800/50">
-                          <td className="py-3 px-3">
-                            <input
-                              type="checkbox"
-                              checked={selectedDiscoveredIndexes.includes(idx)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedDiscoveredIndexes((prev) => [...prev, idx]);
-                                } else {
-                                  setSelectedDiscoveredIndexes((prev) => prev.filter((i) => i !== idx));
-                                }
-                              }}
-                              className="rounded border-slate-700 bg-slate-800 text-indigo-600"
-                            />
-                          </td>
-                          <td className="py-3 px-3 font-semibold text-white">{emp.fullName}</td>
-                          <td className="py-3 px-3 text-slate-300">
-                            {emp.jobTitle || 'Team Member'}{' '}
-                            {emp.department && <span className="text-slate-500">· {emp.department}</span>}
-                          </td>
-                          <td className="py-3 px-3 font-mono text-slate-200">
-                            {emp.email || <span className="text-slate-500 font-sans">No published email</span>}
-                          </td>
-                          <td className="py-3 px-3">
-                            {emp.isDecisionMaker ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                Yes
-                              </span>
-                            ) : (
-                              <span className="text-slate-500">No</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3">
-                            {emp.sourceUrl ? (
-                              <a
-                                href={emp.sourceUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-indigo-400 hover:underline truncate block max-w-[150px]"
-                              >
-                                Source Page
-                              </a>
-                            ) : (
-                              <span className="text-slate-500">N/A</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* TAB 4: SAVED LEADS */}
-        {/* ============================================================ */}
-        {activeTab === 'saved-leads' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
-              <h2 className="text-base font-bold text-white">Saved Lead Repository</h2>
-              <button
-                onClick={() => handleExportCsv(peopleLeads)}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-xs font-medium transition-colors"
-              >
-                Export All Saved CSV
-              </button>
-            </div>
-
-            <ResultsTable
-              leads={peopleLeads}
-              selectedLeadIds={selectedLeadIds}
-              setSelectedLeadIds={setSelectedLeadIds}
-              onRowClick={(lead) => setDrawerLead(lead)}
-              onVerifyEmail={handleVerifyEmail}
-              onRevealContact={handleRevealContact}
-              onAddToList={(lead) => {
-                setSelectedLeadIds([lead.id]);
-                setIsListModalOpen(true);
-              }}
-              verifyingKey={verifyingCandidateKey}
-              loading={loadingPeople}
-            />
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* TAB 5: SAVED LISTS */}
-        {/* ============================================================ */}
-        {activeTab === 'saved-lists' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl p-5 shadow">
-              <div>
-                <h2 className="text-base font-bold text-white">Saved Lists Management</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Organize saved leads into custom outreach segments</p>
-              </div>
-              <button
-                onClick={() => setIsListModalOpen(true)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium transition-colors"
-              >
-                + Create List
-              </button>
-            </div>
-
-            {loadingLists ? (
-              <div className="text-center py-12 text-slate-400 text-xs">Loading saved lists...</div>
-            ) : savedLists.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center text-slate-400 text-xs">
-                No saved lists found. Click + Create List to create your first segment.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {savedLists.map((list) => (
-                  <div
-                    key={list.id}
-                    onClick={async () => {
-                      setSelectedList(list);
-                      try {
-                        const res = await fetch(`${API_BASE_URL}/api/lists/${list.id}/leads`, {
-                          headers: getHeaders(),
-                        });
-                        if (res.ok) {
-                          const data = await res.json();
-                          setListLeads(data || []);
-                        }
-                      } catch (e) {
-                        console.error('Failed to load list leads', e);
-                      }
-                    }}
-                    className={`bg-slate-900 border rounded-xl p-5 cursor-pointer transition-all ${
-                      selectedList?.id === list.id ? 'border-indigo-500 bg-indigo-950/20' : 'border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <h3 className="font-bold text-white text-sm">{list.name}</h3>
-                      <span className="text-[11px] bg-slate-800 text-indigo-300 font-semibold px-2 py-0.5 rounded">
-                        {list.leadCount} leads
-                      </span>
+                {usageStats ? (
+                  <>
+                    {/* Remaining Credit Allocation Bar */}
+                    <div className="bg-[#0b1120] border border-slate-800/80 rounded-xl p-5 space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-300">Credits Utilization</span>
+                        <span className="font-mono text-amber-400 font-bold">
+                          {usageStats.remainingCredits.toLocaleString()} / {usageStats.totalCredits.toLocaleString()} Remaining
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-amber-500 to-indigo-500 h-full rounded-full transition-all duration-700"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              usageStats.totalCredits > 0
+                                ? Math.round((usageStats.remainingCredits / usageStats.totalCredits) * 100)
+                                : 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
                     </div>
-                    {list.description && <p className="text-xs text-slate-400 mt-2">{list.description}</p>}
+
+                    {/* Operational Metrics Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="bg-[#0b1120] border border-slate-800/80 p-4 rounded-xl shadow-sm">
+                        <span className="text-xs text-slate-400 block font-medium">Total Searches</span>
+                        <span className="text-2xl font-bold text-white mt-1.5 block tracking-tight">
+                          {usageStats.totalSearched.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-500 mt-0.5 block">AI & standard queries</span>
+                      </div>
+
+                      <div className="bg-[#0b1120] border border-slate-800/80 p-4 rounded-xl shadow-sm">
+                        <span className="text-xs text-slate-400 block font-medium">Discovered Employees</span>
+                        <span className="text-2xl font-bold text-indigo-400 mt-1.5 block tracking-tight">
+                          {usageStats.totalDiscovered.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-500 mt-0.5 block">From web crawls</span>
+                      </div>
+
+                      <div className="bg-[#0b1120] border border-slate-800/80 p-4 rounded-xl shadow-sm">
+                        <span className="text-xs text-slate-400 block font-medium">Leads Saved</span>
+                        <span className="text-2xl font-bold text-emerald-400 mt-1.5 block tracking-tight">
+                          {usageStats.totalSaved.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-500 mt-0.5 block">In lead repository</span>
+                      </div>
+
+                      <div className="bg-[#0b1120] border border-slate-800/80 p-4 rounded-xl shadow-sm">
+                        <span className="text-xs text-slate-400 block font-medium">Emails Found</span>
+                        <span className="text-2xl font-bold text-purple-400 mt-1.5 block tracking-tight">
+                          {usageStats.totalEmailsFound.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-500 mt-0.5 block">Identified contacts</span>
+                      </div>
+
+                      <div className="bg-[#0b1120] border border-slate-800/80 p-4 rounded-xl shadow-sm">
+                        <span className="text-xs text-slate-400 block font-medium">Emails Verified</span>
+                        <span className="text-2xl font-bold text-blue-400 mt-1.5 block tracking-tight">
+                          {usageStats.totalEmailsVerified.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-500 mt-0.5 block">
+                          {usageStats.totalEmailsFound > 0
+                            ? `${Math.round((usageStats.totalEmailsVerified / usageStats.totalEmailsFound) * 100)}% verification rate`
+                            : 'SMTP verified'}
+                        </span>
+                      </div>
+
+                      <div className="bg-[#0b1120] border border-slate-800/80 p-4 rounded-xl shadow-sm">
+                        <span className="text-xs text-slate-400 block font-medium">Contacts Revealed</span>
+                        <span className="text-2xl font-bold text-pink-400 mt-1.5 block tracking-tight">
+                          {usageStats.totalContactsRevealed.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-500 mt-0.5 block">Unlocked phones & emails</span>
+                      </div>
+
+                      <div className="bg-[#0b1120] border border-slate-800/80 p-4 rounded-xl shadow-sm">
+                        <span className="text-xs text-slate-400 block font-medium">Outreach Lists Created</span>
+                        <span className="text-2xl font-bold text-teal-400 mt-1.5 block tracking-tight">
+                          {usageStats.totalListsCreated.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-500 mt-0.5 block">Targeted campaign sets</span>
+                      </div>
+
+                      <div className="bg-[#0b1120] border border-slate-800/80 p-4 rounded-xl shadow-sm">
+                        <span className="text-xs text-slate-400 block font-medium">Remaining Credits</span>
+                        <span className="text-2xl font-bold text-amber-400 mt-1.5 block tracking-tight">
+                          {usageStats.remainingCredits.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-500 mt-0.5 block">Ready for extraction</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-8 text-center text-slate-400 text-xs">
+                    Loading account metrics...
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Selected List Lead Details */}
-            {selectedList && (
-              <div className="space-y-3 pt-4 border-t border-slate-800">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white">Leads in "{selectedList.name}"</h3>
-                  <button
-                    onClick={() => handleExportCsv(listLeads)}
-                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded"
-                  >
-                    Export List CSV
-                  </button>
-                </div>
-                <ResultsTable
-                  leads={listLeads}
-                  selectedLeadIds={[]}
-                  setSelectedLeadIds={() => {}}
-                  onRowClick={(lead) => setDrawerLead(lead)}
-                  onVerifyEmail={handleVerifyEmail}
-                  onRevealContact={handleRevealContact}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* TAB 6: USAGE & STATISTICS */}
-        {/* ============================================================ */}
-        {activeTab === 'usage' && usageStats && (
-          <div className="space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-4">
-              <h2 className="text-base font-bold text-white">Account Usage & Credits Dashboard</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-slate-800/60 border border-slate-800 p-4 rounded-lg">
-                  <span className="text-xs text-slate-400 block">Remaining Credits</span>
-                  <span className="text-2xl font-extrabold text-amber-400">{usageStats.remainingCredits}</span>
-                </div>
-                <div className="bg-slate-800/60 border border-slate-800 p-4 rounded-lg">
-                  <span className="text-xs text-slate-400 block">Total Searches</span>
-                  <span className="text-2xl font-extrabold text-white">{usageStats.totalSearched}</span>
-                </div>
-                <div className="bg-slate-800/60 border border-slate-800 p-4 rounded-lg">
-                  <span className="text-xs text-slate-400 block">Employees Discovered</span>
-                  <span className="text-2xl font-extrabold text-indigo-400">{usageStats.totalDiscovered}</span>
-                </div>
-                <div className="bg-slate-800/60 border border-slate-800 p-4 rounded-lg">
-                  <span className="text-xs text-slate-400 block">Leads Saved</span>
-                  <span className="text-2xl font-extrabold text-emerald-400">{usageStats.totalSaved}</span>
-                </div>
-                <div className="bg-slate-800/60 border border-slate-800 p-4 rounded-lg">
-                  <span className="text-xs text-slate-400 block">Emails Found</span>
-                  <span className="text-2xl font-extrabold text-purple-400">{usageStats.totalEmailsFound}</span>
-                </div>
-                <div className="bg-slate-800/60 border border-slate-800 p-4 rounded-lg">
-                  <span className="text-xs text-slate-400 block">Emails Verified</span>
-                  <span className="text-2xl font-extrabold text-blue-400">{usageStats.totalEmailsVerified}</span>
-                </div>
-                <div className="bg-slate-800/60 border border-slate-800 p-4 rounded-lg">
-                  <span className="text-xs text-slate-400 block">Contacts Revealed</span>
-                  <span className="text-2xl font-extrabold text-pink-400">{usageStats.totalContactsRevealed}</span>
-                </div>
-                <div className="bg-slate-800/60 border border-slate-800 p-4 rounded-lg">
-                  <span className="text-xs text-slate-400 block">Saved Lists Created</span>
-                  <span className="text-2xl font-extrabold text-teal-400">{usageStats.totalListsCreated}</span>
-                </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
 
-      {/* Slide-Over Profile Drawer Component */}
+      {/* Slide-Over Profile Drawer */}
       <ProfileDrawer
         lead={drawerLead}
         onClose={() => setDrawerLead(null)}
