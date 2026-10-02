@@ -24,6 +24,8 @@ import {
   ExternalLinkIcon,
   SpinnerIcon,
   CheckIcon,
+  CloseIcon,
+  TrashIcon,
 } from '@/components/ui/Icons';
 import { API_BASE_URL } from '@/config/api';
 import {
@@ -81,6 +83,8 @@ export default function DashboardPage() {
   const [listLeads, setListLeads] = useState<EmployeeLead[]>([]);
   const [loadingLists, setLoadingLists] = useState<boolean>(false);
   const [isListModalOpen, setIsListModalOpen] = useState<boolean>(false);
+  const [listToDelete, setListToDelete] = useState<SavedList | null>(null);
+  const [deletingListId, setDeletingListId] = useState<string | null>(null);
 
   // Profile Drawer & Row Interaction
   const [drawerLead, setDrawerLead] = useState<EmployeeLead | null>(null);
@@ -444,6 +448,36 @@ export default function DashboardPage() {
       }
     } catch (e) {
       showNotification('error', 'Failed to create new list.');
+    }
+  };
+
+  // Delete List
+  const handleDeleteList = async (listId: string) => {
+    setDeletingListId(listId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/lists/${listId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      if (handleAuthError(res)) return;
+
+      if (res.ok) {
+        showNotification('success', 'List deleted successfully');
+        setSavedLists((prev) => prev.filter((l) => l.id !== listId));
+        if (selectedList?.id === listId) {
+          setSelectedList(null);
+          setListLeads([]);
+        }
+        setListToDelete(null);
+        fetchUsageStats();
+      } else {
+        const errorData = await res.json().catch(() => null);
+        showNotification('error', errorData?.message || 'Failed to delete list.');
+      }
+    } catch (e) {
+      showNotification('error', 'Failed to delete list.');
+    } finally {
+      setDeletingListId(null);
     }
   };
 
@@ -1167,9 +1201,23 @@ export default function DashboardPage() {
                           <h3 className="font-bold text-white text-sm tracking-tight truncate mr-2">
                             {list.name}
                           </h3>
-                          <Badge variant="info" size="sm">
-                            {list.leadCount} leads
-                          </Badge>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <Badge variant="info" size="sm">
+                              {list.leadCount} leads
+                            </Badge>
+                            <button
+                              type="button"
+                              title="Delete list"
+                              aria-label={`Delete list ${list.name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setListToDelete(list);
+                              }}
+                              className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                            >
+                              <TrashIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                         {list.description && (
                           <p className="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">
@@ -1198,15 +1246,25 @@ export default function DashboardPage() {
                         {listLeads.length} leads assigned to this segment
                       </p>
                     </div>
-                    {listLeads.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      {listLeads.length > 0 && (
+                        <button
+                          onClick={() => handleExportCsv(listLeads)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700/80 transition-colors"
+                        >
+                          <ExportIcon className="w-3.5 h-3.5" />
+                          <span>Export List CSV</span>
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleExportCsv(listLeads)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700/80 transition-colors"
+                        type="button"
+                        onClick={() => setListToDelete(selectedList)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-300 text-xs font-semibold rounded-lg border border-red-800/60 transition-colors"
                       >
-                        <ExportIcon className="w-3.5 h-3.5" />
-                        <span>Export List CSV</span>
+                        <TrashIcon className="w-3.5 h-3.5" />
+                        <span>Delete List</span>
                       </button>
-                    )}
+                    </div>
                   </div>
                   <ResultsTable
                     leads={listLeads}
@@ -1371,6 +1429,69 @@ export default function DashboardPage() {
         onCreateAndSave={handleCreateAndSaveList}
         selectedCount={selectedLeadIds.length}
       />
+
+      {/* Delete List Confirmation Dialog */}
+      {listToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div className="bg-[#0b1120] border border-slate-800 rounded-2xl max-w-md w-full p-6 text-white shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800/80">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+                  <TrashIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 id="delete-modal-title" className="text-sm sm:text-base font-bold text-white tracking-tight">
+                    Delete List
+                  </h3>
+                  <p className="text-[11px] text-slate-400 truncate max-w-[240px]">
+                    "{listToDelete.name}"
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setListToDelete(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <CloseIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Delete this list? The list and its saved associations will be removed. The leads themselves will not be deleted.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800/80">
+              <button
+                type="button"
+                disabled={deletingListId === listToDelete.id}
+                onClick={() => setListToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingListId === listToDelete.id}
+                onClick={() => handleDeleteList(listToDelete.id)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
+              >
+                {deletingListId === listToDelete.id ? (
+                  <SpinnerIcon className="w-3.5 h-3.5" />
+                ) : (
+                  <TrashIcon className="w-3.5 h-3.5" />
+                )}
+                <span>{deletingListId === listToDelete.id ? 'Deleting...' : 'Delete List'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

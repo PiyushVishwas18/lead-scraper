@@ -7,6 +7,8 @@ import com.leadscraper.backend.entity.EmployeeLead;
 import com.leadscraper.backend.entity.SavedList;
 import com.leadscraper.backend.entity.SavedListLead;
 import com.leadscraper.backend.entity.SavedListLeadId;
+import com.leadscraper.backend.exception.ForbiddenException;
+import com.leadscraper.backend.exception.ResourceNotFoundException;
 import com.leadscraper.backend.repository.EmployeeLeadRepository;
 import com.leadscraper.backend.repository.SavedListLeadRepository;
 import com.leadscraper.backend.repository.SavedListRepository;
@@ -69,8 +71,12 @@ public class SavedListService {
 
     @Transactional
     public void deleteList(UUID ownerId, UUID listId) {
-        SavedList list = savedListRepository.findByIdAndOwnerId(listId, ownerId)
-                .orElseThrow(() -> new IllegalArgumentException("Saved list not found"));
+        SavedList list = savedListRepository.findById(listId)
+                .orElseThrow(() -> new ResourceNotFoundException("Saved list not found"));
+        if (!list.getOwnerId().equals(ownerId)) {
+            throw new ForbiddenException("You are not allowed to delete this list");
+        }
+        savedListLeadRepository.deleteByIdListId(listId);
         savedListRepository.delete(list);
     }
 

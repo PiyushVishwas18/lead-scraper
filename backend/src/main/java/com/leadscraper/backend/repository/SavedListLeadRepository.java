@@ -12,5 +12,6 @@ import java.util.UUID;
 public interface SavedListLeadRepository extends JpaRepository<SavedListLead, SavedListLeadId> {
     List<SavedListLead> findByIdListId(UUID listId);
     long countByIdListId(UUID listId);
+    void deleteByIdListId(UUID listId);
     void deleteByIdListIdAndIdLeadId(UUID listId, UUID leadId);
 }
